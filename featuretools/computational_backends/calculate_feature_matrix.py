@@ -1,8 +1,12 @@
 from __future__ import division
 
+import copy
+import cProfile
 import gc
+import io
 import logging
 import os
+import pstats
 import shutil
 from builtins import zip
 from collections import defaultdict
@@ -10,8 +14,10 @@ from datetime import datetime
 from functools import wraps
 
 import dask.bag
+import dask.multiprocessing
 import numpy as np
 import pandas as pd
+from dask import delayed
 from dask.diagnostics import ProgressBar
 from pandas.tseries.frequencies import to_offset
 
@@ -24,6 +30,7 @@ from featuretools.primitives import (
 )
 from featuretools.utils.gen_utils import make_tqdm_iterator
 from featuretools.utils.wrangle import _check_timedelta
+ROOT_DIR = os.path.expanduser("~")
 
 logger = logging.getLogger('featuretools.computational_backend')
 
@@ -88,6 +95,11 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
 
         save_progress (Optional(str)): path to save intermediate computational results
     """
+    if profile:
+        # For debugging
+        pr = cProfile.Profile()
+        pr.enable()
+
     assert (isinstance(features, list) and features != [] and
             all([isinstance(feature, PrimitiveBase) for feature in features])), \
         "features must be a non-empty list of features"
@@ -191,33 +203,33 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
             chunks.append(group)
 
     if njobs != 1:
-        # put chunks in dask bag
-        chunks = dask.bag.from_sequence(chunks, npartitions=njobs * 4)
-        chunks = chunks.map(calculate_chunk,
-                            features,
-                            approximate,
-                            entityset,
-                            backend_verbose,
-                            training_window,
-                            profile,
-                            verbose,
-                            save_progress,
-                            backend,
-                            no_unapproximated_aggs,
-                            cutoff_df_time_var,
-                            target_time,
-                            pass_columns)
+        feature_matrix = []
 
+        for chunk in chunks:
+            chunk  = delayed(calculate_batch)(chunk,
+                                              features,
+                                              approximate,
+                                              entityset,
+                                              backend_verbose,
+                                              training_window,
+                                              profile,
+                                              verbose,
+                                              save_progress,
+                                              backend,
+                                              no_unapproximated_aggs,
+                                              cutoff_df_time_var,
+                                              target_time,
+                                              pass_columns)
+
+        chunks = delayed(pd.concat)(chunks)
         # compute chunks
         if verbose:
             with ProgressBar():
-                feature_matrix = chunks.compute(num_workers=njobs)
+                feature_matrix = chunks.compute(num_workers=njobs, get=dask.multiprocessing.get)
         else:
             feature_matrix = chunks.compute(num_workers=njobs)
 
-        feature_matrix = pd.concat(feature_matrix)
         feature_matrix.sort_index(level='time', kind='mergesort', inplace=True)
-
     else:
         # if the backend is going to be verbose, don't make cutoff times verbose
         if verbose and not backend_verbose:
@@ -230,9 +242,9 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
 
         feature_matrix = []
         for group in iterator:
-            _feature_matrix = calculate_batch(features, group, approximate,
+            _feature_matrix = calculate_batch(group, features, approximate,
                                               entityset, backend_verbose,
-                                              training_window, profile,
+                                              training_window, False,
                                               verbose,
                                               save_progress, backend,
                                               no_unapproximated_aggs,
@@ -250,10 +262,23 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
     if save_progress and os.path.exists(os.path.join(save_progress, 'temp')):
         shutil.rmtree(os.path.join(save_progress, 'temp'))
 
+    # debugging
+    if profile:
+        pr.disable()
+        s = io.BytesIO()
+        ps = pstats.Stats(pr, stream=s).sort_stats("cumulative", "tottime")
+        ps.print_stats()
+        prof_folder_path = os.path.join(ROOT_DIR, 'prof')
+        if not os.path.exists(prof_folder_path):
+            os.mkdir(prof_folder_path)
+        with open(os.path.join(prof_folder_path, 'inst-%s.log' %
+                               datetime.now()), 'w') as f:
+            f.write(s.getvalue())
+
     return feature_matrix
 
 
-def calculate_batch(features, group, approximate, entityset, backend_verbose,
+def calculate_batch(group, features, approximate, entityset, backend_verbose,
                     training_window, profile, verbose, save_progress, backend,
                     no_unapproximated_aggs, cutoff_df_time_var, target_time,
                     pass_columns):
@@ -555,24 +580,3 @@ def calc_num_per_chunk(chunk_size, shape):
         raise ValueError("chunk_size must be None, a float between 0 and 1,"
                          "or a positive integer")
     return num_per_chunk
-
-
-def calculate_chunk(chunk, features, approximate, entityset,
-                    backend_verbose, training_window, profile, verbose,
-                    save_progress, backend, no_unapproximated_aggs,
-                    cutoff_df_time_var, target_time, pass_columns):
-    fm = calculate_batch(features,
-                         chunk[1],
-                         approximate,
-                         entityset,
-                         backend_verbose,
-                         training_window,
-                         profile,
-                         verbose,
-                         save_progress,
-                         backend,
-                         no_unapproximated_aggs,
-                         cutoff_df_time_var,
-                         target_time,
-                         pass_columns)
-    return fm
