@@ -193,7 +193,7 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
 
     backend = PandasBackend(entityset, features)
 
-    if njobs != 1:
+    if njobs != 1 or cluster is not None:
         # set up cluster / client
         if cluster is None:
             temp_cluster = LocalCluster(n_workers=njobs)
