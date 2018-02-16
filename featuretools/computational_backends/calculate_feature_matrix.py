@@ -201,7 +201,6 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
         else:
             client = Client(cluster)
 
-        feature_matrix = []
         scattered_data = client.scatter({'features': features,
                                          'backend': backend},
                                         broadcast=True)
@@ -220,8 +219,10 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
                                    cutoff_df_time_var=cutoff_df_time_var,
                                    target_time=target_time,
                                    pass_columns=pass_columns)
+
         # TODO: verbose
-        feature_matrix = client.submit(pd.concat, chunk_futures).result()
+        feature_matrix = client.gather(chunk_futures)
+        feature_matrix = pd.concat(feature_matrix)
 
         if cluster is None:
             temp_cluster.close()
