@@ -4,6 +4,6 @@ from .calculate_feature_matrix import (
     bin_cutoff_times,
     calculate_feature_matrix,
     calc_num_per_chunk,
-    chunk_cutoff_time,
+    get_next_chunk,
 )
 from .pandas_backend import PandasBackend

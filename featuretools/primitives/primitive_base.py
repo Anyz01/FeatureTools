@@ -159,7 +159,9 @@ class PrimitiveBase(FTBase):
             :class:`pd.DataFrame` : Pandas DataFrame
         """
         from featuretools import calculate_feature_matrix
-        cfm = calculate_feature_matrix([self], cutoff_time=cutoff_time).head(n)
+        cfm = calculate_feature_matrix(features=[self],
+                                       cutoff_time=cutoff_time,
+                                       chunk_size=None).head(n)
         return cfm
 
     def sample(self, n=10, cutoff_time=None):

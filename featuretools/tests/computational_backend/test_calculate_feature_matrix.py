@@ -14,7 +14,8 @@ from ..testing_utils import make_ecommerce_entityset
 from featuretools import EntitySet, Timedelta, calculate_feature_matrix, dfs
 from featuretools.computational_backends.calculate_feature_matrix import (
     bin_cutoff_times,
-    calc_num_per_chunk
+    calc_num_per_chunk,
+    get_next_chunk,
 )
 from featuretools.primitives import (
     AggregationPrimitive,
@@ -293,7 +294,8 @@ def test_approximate_multiple_instances_per_cutoff_time(entityset):
                                               instance_ids=[0, 2],
                                               approximate=Timedelta(1, 'week'),
                                               cutoff_time=[datetime(2011, 4, 9, 10, 31, 19),
-                                                           datetime(2011, 4, 9, 11, 0, 0)])
+                                                           datetime(2011, 4, 9, 11, 0, 0)],
+                                              chunk_size=None)
     assert feature_matrix.shape[0] == 2
     assert feature_matrix[dfeat.get_name()].dropna().shape[0] == 0
     assert feature_matrix[agg_feat.get_name()].tolist() == [5, 1]
@@ -524,6 +526,27 @@ def test_calculating_number_per_chunk():
     assert calc_num_per_chunk(None, shape) == 10
     assert calc_num_per_chunk(1, shape) == 1
     assert calc_num_per_chunk(.5, singleton.shape) == 1
+
+
+def test_get_next_chunk(entityset):
+    times = list([datetime(2011, 4, 9, 10, 30, i * 6) for i in range(5)] +
+                 [datetime(2011, 4, 9, 10, 31, i * 9) for i in range(4)] +
+                 [datetime(2011, 4, 9, 10, 40, 0)] +
+                 [datetime(2011, 4, 10, 10, 40, i) for i in range(2)] +
+                 [datetime(2011, 4, 10, 10, 41, i * 3) for i in range(3)] +
+                 [datetime(2011, 4, 10, 11, 10, i * 3) for i in range(2)])
+    cutoff_time = pd.DataFrame({'time': times, 'instance_id': range(17)})
+    chunks = [chunk for chunk in get_next_chunk(cutoff_time, 'time', 4)]
+    assert len(chunks) == 5
+
+    times = list([datetime(2011, 4, 9, 10, 30, 6) for i in range(5)] +
+                 [datetime(2011, 4, 9, 10, 31, i * 9) for i in range(4)] +
+                 [datetime(2011, 4, 9, 10, 40, 0)] +
+                 [datetime(2011, 4, 10, 10, 40, i) for i in range(2)] +
+                 [datetime(2011, 4, 10, 10, 41, i * 3) for i in range(3)] +
+                 [datetime(2011, 4, 10, 11, 10, i * 3) for i in range(2)])
+    chunks = [chunk for chunk in get_next_chunk(cutoff_time, 'time', 4)]
+    assert len(chunks) == 5
 
 
 def test_calc_feature_matrix_in_chunks(entityset):

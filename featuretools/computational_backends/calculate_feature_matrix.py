@@ -40,7 +40,7 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
                              backend_verbose=False,
                              verbose_desc='calculate_feature_matrix',
                              njobs=1,
-                             chunk_size=None,
+                             chunk_size=.1,
                              cluster=None,
                              profile=False):
     """Calculates a matrix for a given set of instance ids and calculation times.
@@ -181,19 +181,16 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
 
         # Think about collisions: what if original time is a feature
         binned_cutoff_time[target_time] = cutoff_time[cutoff_df_time_var]
-
-        chunks = chunk_cutoff_time(binned_cutoff_time,
-                                   cutoff_df_time_var,
-                                   num_per_chunk)
-
+        cutoff_time_to_pass = binned_cutoff_time
     else:
-        chunks = chunk_cutoff_time(cutoff_time,
-                                   cutoff_df_time_var,
-                                   num_per_chunk)
+        cutoff_time_to_pass = cutoff_time
 
     backend = PandasBackend(entityset, features)
 
     if njobs != 1 or cluster is not None:
+        chunks = [chunk for chunk in get_next_chunk(cutoff_time_to_pass,
+                                                    cutoff_df_time_var,
+                                                    num_per_chunk)]
         # set up cluster / client
         if cluster is None:
             temp_cluster = LocalCluster(n_workers=njobs)
@@ -231,12 +228,21 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
     else:
         # if the backend is going to be verbose, don't make cutoff times verbose
         if verbose and not backend_verbose:
-            iterator = make_tqdm_iterator(iterable=chunks,
-                                          total=len(chunks),
-                                          desc="Progress",
-                                          unit="cutoff time")
+            pbar_string = ("Elapsed: {elapsed} | Remaining: {remaining} | "
+                           "Progress: {l_bar}{bar}|| "
+                           "Calculated: {n}/{total} cutoff times")
+            pbar = make_tqdm_iterator(total=len(cutoff_time),
+                                      bar_format=pbar_string,
+                                      unit="cutoff time")
+
+        # TODO: handle verbose no chunking scenario
+        # TODO: finish handling chunking in test suite
+        if num_per_chunk > 0:
+            iterator = get_next_chunk(cutoff_time_to_pass,
+                                      cutoff_df_time_var,
+                                      num_per_chunk)
         else:
-            iterator = chunks
+            iterator = [cutoff_time_to_pass]
 
         feature_matrix = []
         for chunk in iterator:
@@ -252,6 +258,10 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
             # Do a manual garbage collection in case objects from
             # calculate_chunk weren't collected automatically
             gc.collect()
+            if verbose:
+                pbar.update(len(_feature_matrix))
+        if verbose:
+            pbar.close()
         feature_matrix = pd.concat(feature_matrix)
 
     feature_matrix.sort_index(level='time', kind='mergesort', inplace=True)
@@ -369,6 +379,7 @@ def calculate_chunk(chunk, features, approximate, backend_verbose,
             feature_matrix.append(_feature_matrix)
 
     feature_matrix = pd.concat(feature_matrix)
+    gc.collect()
     return feature_matrix
 
 
@@ -509,6 +520,7 @@ def approximate_features(features, cutoff_time, window, entityset,
                                              training_window=training_window,
                                              approximate=None,
                                              cutoff_time_in_index=False,
+                                             chunk_size=None,
                                              profile=profile)
 
         approx_fms_by_entity[approx_entity_id] = approx_fm
@@ -583,44 +595,41 @@ def calc_num_per_chunk(chunk_size, shape):
     return num_per_chunk
 
 
-def chunk_cutoff_time(cutoff_time, time_variable, num_per_chunk):
+def get_next_chunk(cutoff_time, time_variable, num_per_chunk):
     # groupby time an calculate size of cutoffs
     grouped = cutoff_time.groupby(time_variable, sort=False)
 
-    # split up groups that are too large
-    groups = []
-    for _, group in grouped:
-        indices = group.index.values.tolist()
-        if group.shape[0] > num_per_chunk:
-            for i in range(0, group.shape[0], num_per_chunk):
-                groups.append(indices[i: i + num_per_chunk])
+    # sort groups by size
+    groups = grouped.size().sort_values(ascending=False).index
+
+    chunks = [[]]
+
+    for group_name in groups:
+        # get group locations
+        group = grouped.groups[group_name].values.tolist()
+
+        # divide up group if too large to fit in a single chunk
+        group_slices = []
+        if len(group) > num_per_chunk:
+            for i in range(0, len(group), num_per_chunk):
+                    group_slices.append(group[i: i + num_per_chunk])
         else:
-            groups.append(indices)
+            group_slices.append(group)
 
-    # sort groups largest to smallest
-    groups.sort(key=lambda group: len(group))
+        for group_slice in group_slices:
+            found_chunk = False
+            for i in range(len(chunks)):
+                chunk = chunks[i]
+                if len(chunk) + len(group_slice) <= num_per_chunk:
+                    chunk.extend(group_slice)
+                    found_chunk = True
+                    if len(chunk) == num_per_chunk:
+                        # if chunk is full, pop from partial list and yield
+                        loc_list = chunks.pop(i)
+                        yield cutoff_time.loc[loc_list]
+                    break
+            if not found_chunk:
+                chunks.append(group_slice)
 
-    full_chunks = []
-    partial_chunks = [[]]
-
-    while len(groups) > 0:
-        # get next group
-        group = groups.pop()
-        found_chunk = False
-
-        for i in range(len(partial_chunks)):
-            chunk = partial_chunks[i]
-            if len(chunk) + len(group) <= num_per_chunk:
-                chunk.extend(group)
-                found_chunk = True
-                if len(chunk) == num_per_chunk:
-                    # if chunk is full, pop from partial list and use indices
-                    loc_list = partial_chunks.pop(i)
-                    full_chunks.append(cutoff_time.loc[loc_list])
-                break
-        if not found_chunk:
-            partial_chunks.append(group)
-
-    for chunk in partial_chunks:
-        full_chunks.append(cutoff_time.loc[chunk])
-    return full_chunks
+    for chunk in chunks:
+        yield cutoff_time.loc[chunk]
