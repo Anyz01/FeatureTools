@@ -84,6 +84,16 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
             if bucket is 24 hours, all instances with cutoff times on the same
             day will use the same calculation for expensive features.
 
+        chunk_size (int or float or None): Instead of calculating all rows with
+            the same cutoff time together, splits the rows of the matrix into
+            chunks, prioritizing keeping rows with the same cutoff time in the
+            same chunk. If passed an integer greater than 0, will try to use
+            that many rows per chunk (for example chunk_size=350, would mean
+            350 rows per chunk).  Passing a float value between 0 and 1 sets
+            the chunk size to that percentage of all instances (chunk_size=0.1
+            would mean each chunk would constitute 10% of the feature matrix).
+            If chunk_size=None, chunks are not used.
+
         verbose (Optional(boolean)): Print progress info. The time granularity is per time group
             unless there is only a single cutoff time, in which case backend_verbose is turned on
 
@@ -602,7 +612,7 @@ def get_next_chunk(cutoff_time, time_variable, num_per_chunk):
     # sort groups by size
     groups = grouped.size().sort_values(ascending=False).index
 
-    chunks = [[]]
+    chunks = []
 
     for group_name in groups:
         # get group locations
@@ -617,6 +627,10 @@ def get_next_chunk(cutoff_time, time_variable, num_per_chunk):
             group_slices.append(group)
 
         for group_slice in group_slices:
+            if len(group_slice) == num_per_chunk:
+                yield cutoff_time.loc[group_slice]
+                continue
+
             found_chunk = False
             for i in range(len(chunks)):
                 chunk = chunks[i]
@@ -628,6 +642,7 @@ def get_next_chunk(cutoff_time, time_variable, num_per_chunk):
                         loc_list = chunks.pop(i)
                         yield cutoff_time.loc[loc_list]
                     break
+
             if not found_chunk:
                 chunks.append(group_slice)
 

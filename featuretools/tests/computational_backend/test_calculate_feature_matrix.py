@@ -539,14 +539,22 @@ def test_get_next_chunk(entityset):
     chunks = [chunk for chunk in get_next_chunk(cutoff_time, 'time', 4)]
     assert len(chunks) == 5
 
+    # test when a cutoff time is larger than a chunk
     times = list([datetime(2011, 4, 9, 10, 30, 6) for i in range(5)] +
-                 [datetime(2011, 4, 9, 10, 31, i * 9) for i in range(4)] +
+                 [datetime(2011, 4, 9, 10, 31, 9) for i in range(4)] +
                  [datetime(2011, 4, 9, 10, 40, 0)] +
                  [datetime(2011, 4, 10, 10, 40, i) for i in range(2)] +
                  [datetime(2011, 4, 10, 10, 41, i * 3) for i in range(3)] +
                  [datetime(2011, 4, 10, 11, 10, i * 3) for i in range(2)])
+    cutoff_time = pd.DataFrame({'time': times, 'instance_id': range(17)})
     chunks = [chunk for chunk in get_next_chunk(cutoff_time, 'time', 4)]
     assert len(chunks) == 5
+    # largest cutoff time handled first
+    largest = pd.Series([datetime(2011, 4, 9, 10, 30, 6) for i in range(4)])
+    assert (chunks[0]['time'] == largest).all()
+    # additional part of cutoff time added to another chunk
+    # note: not guaranteed to be the next chunk returned, but is in this case
+    assert (chunks[2]['time'] == times[4]).any()
 
 
 def test_calc_feature_matrix_in_chunks(entityset):

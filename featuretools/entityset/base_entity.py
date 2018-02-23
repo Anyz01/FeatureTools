@@ -186,7 +186,9 @@ class BaseEntity(FTBase):
             instance_ids = self.entityset.get_top_n_instances(self.id, n)
             cutoff_time = pd.DataFrame({'instance_id': instance_ids})
             cutoff_time['time'] = cutoff_time
-            df = calculate_feature_matrix(row, cutoff_time=cutoff_time)
+            df = calculate_feature_matrix(row,
+                                          cutoff_time=cutoff_time,
+                                          chunk_size=None)
         return df
 
     @property
