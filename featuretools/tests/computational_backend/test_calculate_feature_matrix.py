@@ -523,7 +523,7 @@ def test_calculating_number_per_chunk():
     assert calc_num_per_chunk(11, shape) == 11
     assert calc_num_per_chunk(.7, shape) == 7
     assert calc_num_per_chunk(.65, shape) == 6
-    assert calc_num_per_chunk(None, shape) == 10
+    assert calc_num_per_chunk(None, shape) == -1
     assert calc_num_per_chunk(1, shape) == 1
     assert calc_num_per_chunk(.5, singleton.shape) == 1
 
@@ -557,7 +557,7 @@ def test_get_next_chunk(entityset):
     assert (chunks[2]['time'] == times[4]).any()
 
 
-def test_calc_feature_matrix_in_chunks(entityset):
+def test_calc_feature_matrix_no_chunks(entityset):
     times = list([datetime(2011, 4, 9, 10, 30, i * 6) for i in range(5)] +
                  [datetime(2011, 4, 9, 10, 31, i * 9) for i in range(4)] +
                  [datetime(2011, 4, 9, 10, 40, 0)] +
@@ -572,7 +572,7 @@ def test_calc_feature_matrix_in_chunks(entityset):
                                               instance_ids=range(17),
                                               cutoff_time=times,
                                               verbose=True,
-                                              chunk_size=.13,
+                                              chunk_size=None,
                                               approximate='1 hour')
 
     assert (feature_matrix == labels).values.all()

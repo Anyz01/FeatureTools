@@ -245,17 +245,20 @@ def calculate_feature_matrix(features, cutoff_time=None, instance_ids=None,
                                       bar_format=pbar_string,
                                       unit="cutoff time")
 
-        # TODO: handle verbose no chunking scenario
-        # TODO: finish handling chunking in test suite
+        # TODO: handle chunking in test suite
         if num_per_chunk > 0:
             iterator = get_next_chunk(cutoff_time_to_pass,
                                       cutoff_df_time_var,
                                       num_per_chunk)
         else:
-            iterator = [cutoff_time_to_pass]
+            # if not using chunks, use groupby to make an iterator
+            iterator = cutoff_time_to_pass.groupby(cutoff_df_time_var)
 
         feature_matrix = []
         for chunk in iterator:
+            # if not using chunks, pull out the group dataframe
+            if isinstance(chunk, tuple):
+                chunk = chunk[1]
             _feature_matrix = calculate_chunk(chunk, features, approximate,
                                               backend_verbose,
                                               training_window, False,
@@ -598,7 +601,7 @@ def calc_num_per_chunk(chunk_size, shape):
     elif isinstance(chunk_size, int) and chunk_size >= 1:
         num_per_chunk = chunk_size
     elif chunk_size is None:
-        num_per_chunk = shape[0]
+        num_per_chunk = -1
     else:
         raise ValueError("chunk_size must be None, a float between 0 and 1,"
                          "or a positive integer")
