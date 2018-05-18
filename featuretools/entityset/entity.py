@@ -4,15 +4,14 @@ import copy
 import logging
 import time
 from builtins import range
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from past.builtins import basestring
 
 from .timedelta import Timedelta
 
 from featuretools import variable_types as vtypes
+from featuretools.variable_types.data_types import DataTypes
 from featuretools.utils.wrangle import (
     _check_time_type,
     _check_timedelta,
@@ -20,10 +19,6 @@ from featuretools.utils.wrangle import (
 )
 
 logger = logging.getLogger('featuretools.entityset')
-
-_numeric_types = vtypes.PandasTypes._pandas_numerics
-_categorical_types = [vtypes.PandasTypes._categorical]
-_datetime_types = vtypes.PandasTypes._pandas_datetimes
 
 
 class Entity(object):
@@ -68,7 +63,7 @@ class Entity(object):
                 used for inferring variable types.
 
         """
-        assert isinstance(id, basestring), "Entity id must be a string"
+        assert isinstance(id, DataTypes.string), "Entity id must be a string"
         assert len(df.columns) == len(set(df.columns)), "Duplicate column names"
         self.data = {"df": df,
                      "last_time_index": last_time_index,
@@ -278,9 +273,9 @@ class Entity(object):
             if var_metadata['_dtype_repr']:
                 vtype = variable_names.get(var_metadata['_dtype_repr'], vtypes.Variable)
                 variable_types[var_metadata['id']] = vtype
-                defaults.append(vtypes.DEFAULT_DTYPE_VALUES[vtype._default_pandas_dtype])
+                defaults.append(DataTypes.get_default(vtype.default_dtype))
             else:
-                defaults.append(vtypes.DEFAULT_DTYPE_VALUES[object])
+                defaults.append(DataTypes.get_default(vtype.default_dtype))
             columns.append(var_metadata['id'])
         to_init['variable_types'] = variable_types
         to_init['df'] = pd.DataFrame({c: [d]
@@ -370,19 +365,19 @@ class Entity(object):
 
             if var_id not in self.df.columns:
                 raise LookupError("Variable ID %s not in DataFrame" % (var_id))
-            current_type = self.df[var_id].dtype.name
+            current_type = self.df[var_id].dtype
 
             if issubclass(desired_type, vtypes.Numeric) and \
-                    current_type not in _numeric_types:
-                self.convert_variable_data(var_id, desired_type, **type_args)
-
-            if issubclass(desired_type, vtypes.Discrete) and \
-                    current_type not in _categorical_types:
+                    not DataTypes.issubclass(current_type, DataTypes.numeric):
+                if var_id == 'num_square_feet':
+                    import pdb; pdb.set_trace()
                 self.convert_variable_data(var_id, desired_type, **type_args)
 
             if issubclass(desired_type, vtypes.Datetime) and \
-                    current_type not in _datetime_types:
+                    not DataTypes.issubclass(current_type, DataTypes.datetime):
                 self.convert_variable_data(var_id, desired_type, **type_args)
+            # TODO: do we want to do anything with Discrete? Right now we don't do anything
+            # in convert_variable_data
 
     def convert_variable_data(self, column_id, new_type, **kwargs):
         """
@@ -435,7 +430,7 @@ class Entity(object):
         dtype_name = self.df[index_var].dtype.name
         if (dtype_name.find('int') == -1 and
                 dtype_name.find('object') > -1 or dtype_name.find('categ') > -1):
-            if isinstance(self.df[index_var].iloc[0], (int, np.int32, np.int64)):
+            if isinstance(self.df[index_var].iloc[0], DataTypes.numeric):
                 try:
                     self.df[index_var] = self.df[index_var].astype(int)
                 except ValueError:
@@ -903,13 +898,13 @@ class Entity(object):
 
 
 def col_is_datetime(col):
-    if (col.dtype.name.find('datetime') > -1 or
-            (len(col) and isinstance(col.iloc[0], datetime))):
+    if (DataTypes.issubclass(col.dtype, DataTypes.datetime) or
+            (len(col) and isinstance(col.iloc[0], DataTypes.datetime))):
         return True
 
     # TODO: not sure this is ideal behavior.
     # it converts int columns that have dtype=object to datetimes starting from 1970
-    elif col.dtype.name.find('str') > -1 or col.dtype.name.find('object') > -1:
+    elif DataTypes.issubclass(col.dtype, (DataTypes.string, DataTypes.object)):
         try:
             pd.to_datetime(col.dropna().iloc[:10], errors='raise')
         except Exception:

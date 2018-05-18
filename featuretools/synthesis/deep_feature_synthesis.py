@@ -7,7 +7,6 @@ from past.builtins import basestring
 from .dfs_filters import LimitModeUniques, TraverseUp
 
 import featuretools.primitives.api as ftypes
-from featuretools import variable_types
 from featuretools.primitives.api import (
     AggregationPrimitive,
     BinaryFeature,
@@ -19,6 +18,7 @@ from featuretools.primitives.api import (
     TimeSince
 )
 from featuretools.variable_types import Boolean, Categorical, Numeric, Ordinal
+from featuretools.variable_types.data_types import DataTypes
 
 logger = logging.getLogger('featuretools')
 
@@ -671,7 +671,7 @@ class DeepFeatureSynthesis(object):
         for feat in all_features[entity.id]:
             f = all_features[entity.id][feat]
 
-            if (variable_type == variable_types.PandasTypes._all or
+            if (variable_type == DataTypes._all or
                     f.variable_type == variable_type or
                     any(issubclass(f.variable_type, vt) for vt in variable_type)):
                 if ((max_depth is None or self._get_depth(f) <= max_depth) and

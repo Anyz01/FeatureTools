@@ -1,7 +1,6 @@
 from __future__ import division
 
 from builtins import range, str
-from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -12,6 +11,7 @@ from .aggregation_primitive_base import (
     make_agg_primitive
 )
 
+from featuretools.variable_types.data_types import DataTypes
 from featuretools.variable_types import (
     Boolean,
     DatetimeTimeIndex,
@@ -232,7 +232,7 @@ class AvgTimeBetween(AggregationPrimitive):
             x = x.dropna()
             if x.shape[0] < 2:
                 return np.nan
-            if isinstance(x.iloc[0], (pd.Timestamp, datetime)):
+            if isinstance(x.iloc[0], DataTypes.datetime):
                 x = x.astype('int64')
                 # use len(x)-1 because we care about difference
                 # between values, len(x)-1 = len(diff(x))
@@ -360,14 +360,14 @@ class Trend(AggregationPrimitive):
             df = pd.DataFrame({"x": x, "y": y}).dropna()
             if df.shape[0] <= 2:
                 return np.nan
-            if isinstance(df['x'].iloc[0], (datetime, pd.Timestamp)):
+            if isinstance(df['x'].iloc[0], DataTypes.datetime):
                 x = convert_datetime_to_floats(df['x'])
             else:
                 x = df['x'].values
 
-            if isinstance(df['y'].iloc[0], (datetime, pd.Timestamp)):
+            if isinstance(df['y'].iloc[0], DataTypes.datetime):
                 y = convert_datetime_to_floats(df['y'])
-            elif isinstance(df['y'].iloc[0], (timedelta, pd.Timedelta)):
+            elif isinstance(df['y'].iloc[0], DataTypes.timedelta):
                 y = convert_timedelta_to_floats(df['y'])
             else:
                 y = df['y'].values

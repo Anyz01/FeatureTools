@@ -12,11 +12,9 @@ from pandas import Timestamp
 from pandas.io.pickle import read_pickle as pd_read_pickle
 from pandas.io.pickle import to_pickle as pd_to_pickle
 
-from featuretools import variable_types as vtypes
+from featuretools.variable_types.data_types import DataTypes
 
 logger = logging.getLogger('featuretools.entityset')
-
-_datetime_types = vtypes.PandasTypes._pandas_datetimes
 
 
 def parquet_compatible(df):
@@ -60,7 +58,7 @@ def write_parquet_entity_data(entity_path, entity):
         for instance, index in mapping_dict.items():
             var_index_filename = os.path.join(var_path, '{}.parq'.format(instance))
             series_name = "is_str"
-            if isinstance(instance, int):
+            if isinstance(instance, DataTypes.integer):
                 series_name = "is_int"
             write(var_index_filename, pd.Series(index).to_frame(series_name))
             entity_size += os.stat(var_index_filename).st_size

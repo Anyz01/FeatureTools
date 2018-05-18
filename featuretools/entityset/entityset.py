@@ -12,6 +12,7 @@ from .relationship import Relationship
 from .serialization import deserialize, serialize
 
 import featuretools.variable_types.variable as vtypes
+from featuretools.variable_types.data_types import DataTypes
 from featuretools.utils.gen_utils import make_tqdm_iterator
 from featuretools.utils.wrangle import _check_variable_list
 
@@ -792,7 +793,7 @@ class EntitySet(object):
         if make_time_index is None and base_entity.time_index is not None:
             make_time_index = True
 
-        if isinstance(make_time_index, str):
+        if isinstance(make_time_index, DataTypes.string):
             base_time_index = make_time_index
             new_entity_time_index = base_entity[make_time_index].id
         elif make_time_index:
@@ -913,10 +914,10 @@ class EntitySet(object):
         new_data = None
         for v in to_combine:
             if new_data is None:
-                new_data = df[v.id].map(lambda x: (str(x) if isinstance(x, (int, float)) else x).encode('utf-8'))
+                new_data = df[v.id].map(lambda x: (str(x) if isinstance(x, DataTypes.numeric) else x).encode('utf-8'))
                 continue
             new_data += "_".encode('utf-8')
-            new_data += df[v.id].map(lambda x: (str(x) if isinstance(x, (int, float)) else x).encode('utf-8'))
+            new_data += df[v.id].map(lambda x: (str(x) if isinstance(x, DataTypes.numeric) else x).encode('utf-8'))
 
         if hashed:
             new_data = new_data.map(hash)

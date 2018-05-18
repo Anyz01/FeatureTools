@@ -1,12 +1,10 @@
 from __future__ import division
 
 from builtins import str
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from past.builtins import basestring
 
 from featuretools.exceptions import NotEnoughData
 
@@ -74,7 +72,8 @@ class Timedelta(object):
                 exactly timedelta distance away from the original time/observation
         """
         # TODO: check if value is int or float
-        if isinstance(value, basestring):
+        from featuretools.variable_types.data_types import DataTypes
+        if isinstance(value, DataTypes.string):
             from featuretools.utils.wrangle import _check_timedelta
             td = _check_timedelta(value)
             value, unit = td.value, td.unit
@@ -215,10 +214,11 @@ class Timedelta(object):
         return time
 
     def _do_sub(self, time, value):
+        from featuretools.variable_types.data_types import DataTypes
         assert value > 0, "Value must be greater than 0"
 
         if (self.unit == self._generic_unit and
-                not isinstance(time, (pd.Timestamp, datetime))):
+                not isinstance(time, DataTypes.datetime)):
             return time - value
         elif self.unit != self._Observations:
             return add_td(time, -1 * value, self.unit)
@@ -238,10 +238,11 @@ class Timedelta(object):
         raise Exception("Invalid unit")
 
     def _do_add(self, time, value):
+        from featuretools.variable_types.data_types import DataTypes
         assert value > 0, "Value must be greater than 0"
 
         if (self.unit == self._generic_unit and
-                not isinstance(time, (pd.Timestamp, datetime))):
+                not isinstance(time, DataTypes.datetime)):
             return time + value
         elif self.unit not in [self._Observations]:
             return add_td(time, value, self.unit)

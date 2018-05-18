@@ -14,6 +14,7 @@ import featuretools as ft
 from featuretools import variable_types
 from featuretools.entityset import EntitySet
 from featuretools.tests import integration_data
+from featuretools.variable_types.data_types import DataTypes
 
 
 @pytest.fixture()
@@ -165,8 +166,8 @@ def test_converts_variable_types_on_init():
                                     variable_types=vtypes, dataframe=df)
 
     entity_df = entityset['test_entity'].df
-    assert entity_df['ints'].dtype.name in variable_types.PandasTypes._pandas_numerics
-    assert entity_df['floats'].dtype.name in variable_types.PandasTypes._pandas_numerics
+    assert isinstance(entity_df['ints'].iloc[0], DataTypes.integer)
+    assert isinstance(entity_df['floats'].iloc[0], DataTypes.float)
 
     # this is infer from pandas dtype
     e = entityset["test_entity"]
@@ -188,7 +189,7 @@ def test_converts_variable_type_after_init():
 
     e.convert_variable_type('ints', variable_types.Numeric)
     assert isinstance(e['ints'], variable_types.Numeric)
-    assert df['ints'].dtype.name in variable_types.PandasTypes._pandas_numerics
+    assert isinstance(df['ints'].iloc[0], DataTypes.integer)
 
     e.convert_variable_type('ints', variable_types.Categorical)
     assert isinstance(e['ints'], variable_types.Categorical)

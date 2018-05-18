@@ -1,12 +1,11 @@
 import re
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from past.builtins import basestring
 
 from featuretools import variable_types
 from featuretools.entityset.timedelta import Timedelta
+from featuretools.variable_types.data_types import DataTypes
 
 
 def flatten_2d(array):
@@ -84,7 +83,7 @@ def _check_timedelta(td, entity_id=None, related_entity_id=None):
         if td.entity is not None and related_entity_id is not None and td.entity == related_entity_id:
             raise ValueError("Timedelta entity {} same as passed related entity {}".format(td.entity, related_entity_id))
         return td
-    elif not isinstance(td, (basestring, tuple, int, float)):
+    elif not isinstance(td, (DataTypes.string, DataTypes.numeric, tuple)):
         raise ValueError("Unable to parse timedelta: {}".format(td))
 
     # TODO: allow observations from an entity in string
@@ -172,13 +171,13 @@ def _check_time_against_column(time, time_column):
     '''
     if time is None:
         return True
-    elif isinstance(time, (int, float)):
+    elif isinstance(time, DataTypes.numeric):
         return isinstance(time_column,
                           variable_types.Numeric)
-    elif isinstance(time, (pd.Timestamp, datetime)):
+    elif isinstance(time, DataTypes.datetime):
         return isinstance(time_column,
                           variable_types.Datetime)
-    elif isinstance(time, Timedelta):
+    elif isinstance(time, DataTypes.timedelta):
         return (isinstance(time_column, (variable_types.Datetime, variable_types.DatetimeTimeIndex)) or
                 (isinstance(time_column, (variable_types.Ordinal, variable_types.Numeric, variable_types.TimeIndex)) and
                  time.unit not in Timedelta._time_units))
@@ -198,10 +197,10 @@ def _check_time_against_time(time1, time2):
     '''
     if time1 is None:
         return True
-    elif isinstance(time1, (int, float)):
-        return isinstance(time2, (int, float))
+    elif isinstance(time1, DataTypes.numeric):
+        return isinstance(time2, DataTypes.numeric)
     elif isinstance(time1, Timedelta):
-        if isinstance(time2, (pd.Timestamp, datetime)):
+        if isinstance(time2, DataTypes.datetime):
             return True
         elif time1.unit == Timedelta._Observations:
             return True
@@ -209,8 +208,8 @@ def _check_time_against_time(time1, time2):
             return True
         else:
             return False
-    elif isinstance(time1, (pd.Timestamp, datetime)):
-        return isinstance(time2, (pd.Timedelta))
+    elif isinstance(time1, DataTypes.datetime):
+        return isinstance(time2, DataTypes.timedelta)
     else:
         return False
 
@@ -221,10 +220,9 @@ def _check_time_type(time):
     Returns "numeric", "datetime", or "unknown" based on results
     '''
     time_type = None
-    if isinstance(time, (datetime, np.datetime64)):
+    if isinstance(time, DataTypes.datetime):
         time_type = variable_types.DatetimeTimeIndex
-    elif isinstance(time, (int, float)) or np.issubdtype(time,
-                                                         np.dtype((np.integer, np.floating)).type):
+    elif isinstance(time, DataTypes.numeric):
         time_type = variable_types.NumericTimeIndex
     return time_type
 
